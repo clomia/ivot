@@ -1,3 +1,5 @@
+""" API 인증을 추상화합니다. """
+
 import os
 from datetime import datetime
 
@@ -21,7 +23,7 @@ class _OAuth:
                 "appkey": APP_KEY,
                 "secretkey": APP_SECRET,
             },
-        )["approval_key"]
+        ).json()["approval_key"]
         self.refresh()
 
     def refresh(self):
@@ -36,7 +38,7 @@ class _OAuth:
         ).json()
         self._token = token_info["access_token"]
         self.expired = datetime.strptime(token_info["access_token_token_expired"], "%Y-%m-%d %H:%M:%S")
-    
+
     @property
     def token(self):
         """ 유효한 토큰을 반환 """
@@ -57,20 +59,3 @@ class _OAuth:
         ).json()["HASH"]
 
 auth = _OAuth()
-
-def is_daytime():
-    """ 해외 주간 거래시간인 경우 True """
-    res = requests.get(
-        url="https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/dayornight",
-        headers={
-            "authorization": f"Bearer {auth.token}",
-            "appkey":APP_KEY, 
-            "appsecret":APP_SECRET, 
-            "tr_id":"JTTT3010R",
-        },
-    )
-    return True if res.json()["output"]["PSBL_YN"] == "N" else False
-
-def price_history(symbol):
-    """ 현재로부터 과거 100일치  """
-    pass
