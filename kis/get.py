@@ -66,11 +66,15 @@ class StockPrice:
         for ele in res["output2"]:
             if not ele["clos"]:
                 raise NoMoreData
+            clos = float(ele["clos"])
+            low = float(ele["low"])
+            high = float(ele["high"])
+            typical_price = (clos + low + high) / 3
             yield {
                 "date": datetime.strptime(ele["xymd"], "%Y%m%d"),
-                "price": float(ele["clos"]),
-                "low": float(ele["low"]),
-                "high": float(ele["high"]),
+                "price": typical_price,
+                "low": low,
+                "high": high,
                 "tvol": float(ele["tvol"]),
                 "tamt": float(ele["tamt"]),
             }
@@ -81,7 +85,6 @@ class StockPrice:
         - 존재하는 과거데이터가 size 보다 작은 경우 NoMoreData를 raise합니다.
         """
         total = defaultdict(list)
-
         it = self._history_iter(ref_day)
         while len(total["date"]) < size:
             try:
@@ -92,6 +95,10 @@ class StockPrice:
                 for data in total.values():
                     del data[-1]
                 it = self._history_iter(current["date"])
+
+        for key in total:  # 데이터를 과거 -> 현재 순서대로 정렬합니다.
+            total[key].reverse()
+
         return StockAnalyzer(symbol=self.symbol, exchange=self.exchange, **total)
 
     def current(self):
