@@ -142,7 +142,7 @@ class Explorer:
 
         return analyzers
 
-    def current_price(self, x1, x2) -> List[StockAnalyzer]:
+    def current_price(self, x1, x2):
         """가격 범위로 검색합니다."""
         params = {"CO_YN_PRICECUR": "1", "CO_ST_PRICECUR": x1, "CO_EN_PRICECUR": x2}
         return self.cond_search_api_call(params)
@@ -182,5 +182,30 @@ class Explorer:
         params = {"CO_YN_VALX": "1", "CO_ST_VALX": x1, "CO_EN_VALX": x2}
         return self.cond_search_api_call(params)
 
-    def filter(self):
-        pass
+    def all(self) -> List[StockAnalyzer]:
+        """
+        - AMS,NAS,NYS 3개의 미국 거래소에서 모든 주식을 불러옵니다.
+        - 약 23분 소요됩니다.
+        - 총 주식 갯수는 약 1만개입니다.
+        """
+        analyzers = []
+        targets = {
+            "AMS": ams_symbols,
+            "NAS": nas_symbols,
+            "NYS": nys_symbols,
+        }
+        for exchange, symbols in targets.items():
+            for cnt, symbol in enumerate(symbols):
+                print("")
+                try:
+                    analyzers.append(
+                        StockPrice(exchange=exchange, symbol=symbol).analyzer()
+                    )
+                except NoMoreData:  # analzer를 구성할 정도의 데이터가 없다면 그냥 pass한다.
+                    pass
+                print(
+                    f"[Explorer (all)] loading {exchange}: {cnt/len(symbols) * 100:.3f}%",
+                    end="\r",
+                )
+            print(f"[Explorer] {exchange} loading complete")
+        return analyzers
