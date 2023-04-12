@@ -40,7 +40,7 @@ class NoMoreData(Exception):
     """더이상 데이터가 없어서 작업을 완료할 수 없습니다."""
 
 
-class StockPrice:
+class Stock:
     def __init__(self, *, exchange: str, symbol: str):
         self.symbol = symbol
         self.exchange = exchange
@@ -120,99 +120,103 @@ class StockPrice:
         return float(res["output"]["last"])
 
 
-class Explorer:
-    def cond_search_api_call(self, params: dict) -> List[StockAnalyzer]:
-        """해외주식 조건검색 API call 함수"""
-        analyzers = []
+def cond_search_api_call(params: dict) -> List[StockAnalyzer]:
+    """해외주식 조건검색 API call 함수"""
+    analyzers = []
 
-        for exc_code in exchange_list:
-            res = requests.get(
-                url="https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/inquire-search",
-                headers={
-                    "authorization": f"Bearer {auth.token}",
-                    "appkey": APP_KEY,
-                    "appsecret": APP_SECRET,
-                    "tr_id": "HHDFS76410000",
-                    "custtype": "P",
-                },
-                params={"AUTH": "", "EXCD": exc_code} | params,
-            ).json()
-            for data in res["output2"]:
-                try:
-                    analyzers.append(
-                        StockPrice(
-                            exchange=data["excd"], symbol=data["symb"]
-                        ).analyzer()
-                    )
-                except NoMoreData:
-                    continue
-
-        return analyzers
-
-    def current_price(self, x1, x2):
-        """가격 범위로 검색합니다."""
-        params = {"CO_YN_PRICECUR": "1", "CO_ST_PRICECUR": x1, "CO_EN_PRICECUR": x2}
-        return self.cond_search_api_call(params)
-
-    def fluctuation_rate(self, x1, x2):
-        """등락율 범위로 검색합니다."""
-        params = {"CO_YN_RATE": "1", "CO_ST_RATE": x1, "CO_EN_RATE": x2}
-        return self.cond_search_api_call(params)
-
-    def trading_volume(self, x1, x2):
-        """거래량 범위로 검색합니다."""
-        params = {"CO_YN_VOLUME": "1", "CO_ST_VOLUME": x1, "CO_EN_VOLUME": x2}
-        return self.cond_search_api_call(params)
-
-    def trading_price(self, x1, x2):
-        """거래대금 범위로 검색합니다."""
-        params = {"CO_YN_AMT": "1", "CO_ST_AMT": x1, "CO_EN_AMT": x2}
-        return self.cond_search_api_call(params)
-
-    def per(self, x1, x2):
-        """PER(주가수익비율) 범위로 검색합니다."""
-        params = {"CO_YN_PER": "1", "CO_ST_PER": x1, "CO_EN_PER": x2}
-        return self.cond_search_api_call(params)
-
-    def eps(self, x1, x2):
-        """EPS(주당순이익) 범위로 검색합니다."""
-        params = {"CO_YN_EPS": "1", "CO_ST_EPS": x1, "CO_EN_EPS": x2}
-        return self.cond_search_api_call(params)
-
-    def shares_amount(self, x1, x2):
-        """발행 주식 수 범위로 검색합니다."""
-        params = {"CO_YN_SHAR": "1", "CO_ST_SHAR": x1, "CO_EN_SHAR": x2}
-        return self.cond_search_api_call(params)
-
-    def market_capitalization(self, x1, x2):
-        """기업 시가총액 범위로 검색합니다."""
-        params = {"CO_YN_VALX": "1", "CO_ST_VALX": x1, "CO_EN_VALX": x2}
-        return self.cond_search_api_call(params)
-
-    def all(self) -> List[StockAnalyzer]:
-        """
-        - AMS,NAS,NYS 3개의 미국 거래소에서 모든 주식을 불러옵니다.
-        - 약 23분 소요됩니다.
-        - 총 주식 갯수는 약 1만개입니다.
-        """
-        analyzers = []
-        targets = {
-            "AMS": ams_symbols,
-            "NAS": nas_symbols,
-            "NYS": nys_symbols,
-        }
-        for exchange, symbols in targets.items():
-            for cnt, symbol in enumerate(symbols):
-                print("")
-                try:
-                    analyzers.append(
-                        StockPrice(exchange=exchange, symbol=symbol).analyzer()
-                    )
-                except NoMoreData:  # analzer를 구성할 정도의 데이터가 없다면 그냥 pass한다.
-                    pass
-                print(
-                    f"[Explorer (all)] loading {exchange}: {cnt/len(symbols) * 100:.3f}%",
-                    end="\r",
+    for exc_code in exchange_list:
+        res = requests.get(
+            url="https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/inquire-search",
+            headers={
+                "authorization": f"Bearer {auth.token}",
+                "appkey": APP_KEY,
+                "appsecret": APP_SECRET,
+                "tr_id": "HHDFS76410000",
+                "custtype": "P",
+            },
+            params={"AUTH": "", "EXCD": exc_code} | params,
+        ).json()
+        for data in res["output2"]:
+            try:
+                analyzers.append(
+                    Stock(exchange=data["excd"], symbol=data["symb"]).analyzer()
                 )
-            print(f"[Explorer] {exchange} loading complete")
-        return analyzers
+            except NoMoreData:
+                continue
+
+    return analyzers
+
+
+def current_price(x1, x2):
+    """가격 범위로 검색합니다."""
+    params = {"CO_YN_PRICECUR": "1", "CO_ST_PRICECUR": x1, "CO_EN_PRICECUR": x2}
+    return cond_search_api_call(params)
+
+
+def fluctuation_rate(x1, x2):
+    """등락율 범위로 검색합니다."""
+    params = {"CO_YN_RATE": "1", "CO_ST_RATE": x1, "CO_EN_RATE": x2}
+    return cond_search_api_call(params)
+
+
+def trading_volume(x1, x2):
+    """거래량 범위로 검색합니다."""
+    params = {"CO_YN_VOLUME": "1", "CO_ST_VOLUME": x1, "CO_EN_VOLUME": x2}
+    return cond_search_api_call(params)
+
+
+def trading_price(x1, x2):
+    """거래대금 범위로 검색합니다."""
+    params = {"CO_YN_AMT": "1", "CO_ST_AMT": x1, "CO_EN_AMT": x2}
+    return cond_search_api_call(params)
+
+
+def per(x1, x2):
+    """PER(주가수익비율) 범위로 검색합니다."""
+    params = {"CO_YN_PER": "1", "CO_ST_PER": x1, "CO_EN_PER": x2}
+    return cond_search_api_call(params)
+
+
+def eps(x1, x2):
+    """EPS(주당순이익) 범위로 검색합니다."""
+    params = {"CO_YN_EPS": "1", "CO_ST_EPS": x1, "CO_EN_EPS": x2}
+    return cond_search_api_call(params)
+
+
+def shares_amount(x1, x2):
+    """발행 주식 수 범위로 검색합니다."""
+    params = {"CO_YN_SHAR": "1", "CO_ST_SHAR": x1, "CO_EN_SHAR": x2}
+    return cond_search_api_call(params)
+
+
+def market_capitalization(x1, x2):
+    """기업 시가총액 범위로 검색합니다."""
+    params = {"CO_YN_VALX": "1", "CO_ST_VALX": x1, "CO_EN_VALX": x2}
+    return cond_search_api_call(params)
+
+
+def all() -> List[StockAnalyzer]:
+    """
+    - AMS,NAS,NYS 3개의 미국 거래소에서 모든 주식을 불러옵니다.
+    - 약 23분 소요됩니다.
+    - 총 주식 갯수는 약 1만개입니다.
+    """
+    analyzers = []
+    targets = {
+        "AMS": ams_symbols,
+        "NAS": nas_symbols,
+        "NYS": nys_symbols,
+    }
+    for exchange, symbols in targets.items():
+        for cnt, symbol in enumerate(symbols):
+            print("")
+            try:
+                analyzers.append(Stock(exchange=exchange, symbol=symbol).analyzer())
+            except NoMoreData:  # analzer를 구성할 정도의 데이터가 없다면 그냥 pass한다.
+                pass
+            print(
+                f"[Explorer (all)] loading {exchange}: {cnt/len(symbols) * 100:.3f}%",
+                end="\r",
+            )
+        print(f"[Explorer] {exchange} loading complete")
+    return analyzers

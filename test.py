@@ -1,6 +1,6 @@
 from kis.get import Explorer
 
-# sp = StockPrice(exchange="NAS", symbol="QQQ")
+# sp = Stock(exchange="NAS", symbol="QQQ")
 
 # his = sp.current_price()
 # print(his)

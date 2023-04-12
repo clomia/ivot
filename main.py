@@ -1,3 +1,3 @@
-from kis.get import StockPrice
+from kis.get import Stock
 
-StockPrice(exchange="NAS", symbol="META")
+Stock(exchange="NAS", symbol="META")
