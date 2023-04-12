@@ -1,5 +1,7 @@
+from math import sqrt
 from typing import List
 from datetime import datetime
+from collections import defaultdict
 
 import numpy as np
 
@@ -34,8 +36,25 @@ class StockAnalyzer:
         if self.length < 100:
             raise ValueError(f"데이터 길이는 100 이상이어야 합니다. 현재: {self.length}")
 
-    def bollinger_band(self):
-        self.date
+    def bollinger_band(self, period=20, multiplier=2):
+        data = defaultdict(list)
+
+        for i, price in enumerate(self.price[period:]):
+            window = self.price[i : i + period]
+            average = sum(window) / period
+            std = sqrt(sum([(x - average) ** 2 for x in window]) / period)  # 표준편차
+            upper = average + (std * multiplier)
+            lower = average - (std * multiplier)
+            perb = (price - lower) / (upper - lower)
+            bandwidth = upper - lower / average
+
+            data["center"].append(average)
+            data["upper"].append(upper)
+            data["lower"].append(lower)
+            data["perb"].append(perb)
+            data["bandwidth"].append(bandwidth)
+
+        return dict(data)
 
     def __repr__(self) -> str:
         return f"<StockAnalyzer {self.symbol}/{self.exchange} (length: {self.length}, ref_date: {self.date[0]})>"
