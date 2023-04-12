@@ -6,6 +6,8 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
+from system.logger import log
+
 load_dotenv()
 
 APP_KEY = os.environ.get("APP_KEY")
@@ -13,8 +15,8 @@ APP_SECRET = os.environ.get("APP_SECRET")
 CANO = os.environ.get("CANO")
 ACNT_PRDT_CD = os.environ.get("ACNT_PRDT_CD")
 
-class _OAuth:
 
+class _OAuth:
     def __init__(self):
         self.approval_key = requests.post(
             url="https://openapi.koreainvestment.com:9443/oauth2/Approval",
@@ -27,27 +29,30 @@ class _OAuth:
         self.refresh()
 
     def refresh(self):
-        """ 토큰 갱신 """
+        """토큰 갱신"""
         token_info = requests.post(
             url="https://openapi.koreainvestment.com:9443/oauth2/tokenP",
             json={
                 "grant_type": "client_credentials",
                 "appkey": APP_KEY,
-                "appsecret": APP_SECRET
+                "appsecret": APP_SECRET,
             },
         ).json()
         self._token = token_info["access_token"]
-        self.expired = datetime.strptime(token_info["access_token_token_expired"], "%Y-%m-%d %H:%M:%S")
+        self.expired = datetime.strptime(
+            token_info["access_token_token_expired"], "%Y-%m-%d %H:%M:%S"
+        )
 
     @property
     def token(self):
-        """ 유효한 토큰을 반환 """
+        """유효한 토큰을 반환"""
         if self.expired < datetime.now():
             self.refresh()
+            log.info("토큰이 만료되어 새로운 토큰이 발급되었습니다.")
         return self._token
 
-    def hash(self, post:dict):
-        """ POST Request Body값 암호화에 필요한 hash key 생성 """
+    def hash(self, post: dict):
+        """POST Request Body값 암호화에 필요한 hash key 생성"""
         return requests.post(
             url="https://openapi.koreainvestment.com:9443/uapi/hashkey",
             headers={
@@ -55,7 +60,8 @@ class _OAuth:
                 "appKey": APP_KEY,
                 "appSecret": APP_SECRET,
             },
-            json=post
+            json=post,
         ).json()["HASH"]
+
 
 auth = _OAuth()
