@@ -4,16 +4,13 @@ import os
 from datetime import datetime
 
 import requests
-from dotenv import load_dotenv
 
 from system.logger import log
 
-load_dotenv()
-
-APP_KEY = os.environ.get("APP_KEY")
-APP_SECRET = os.environ.get("APP_SECRET")
-CANO = os.environ.get("CANO")
-ACNT_PRDT_CD = os.environ.get("ACNT_PRDT_CD")
+KIS_APP_KEY = os.environ.get("KIS_APP_KEY")
+KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET")
+KIS_CANO = os.environ.get("KIS_CANO")
+KIS_ACNT_PRDT_CD = os.environ.get("KIS_ACNT_PRDT_CD")
 
 
 class _OAuth:
@@ -22,8 +19,8 @@ class _OAuth:
             url="https://openapi.koreainvestment.com:9443/oauth2/Approval",
             json={
                 "grant_type": "client_credentials",
-                "appkey": APP_KEY,
-                "secretkey": APP_SECRET,
+                "appkey": KIS_APP_KEY,
+                "secretkey": KIS_APP_SECRET,
             },
         ).json()["approval_key"]
         self.refresh()
@@ -34,8 +31,8 @@ class _OAuth:
             url="https://openapi.koreainvestment.com:9443/oauth2/tokenP",
             json={
                 "grant_type": "client_credentials",
-                "appkey": APP_KEY,
-                "appsecret": APP_SECRET,
+                "appkey": KIS_APP_KEY,
+                "appsecret": KIS_APP_SECRET,
             },
         ).json()
         self._token = token_info["access_token"]
@@ -57,8 +54,8 @@ class _OAuth:
             url="https://openapi.koreainvestment.com:9443/uapi/hashkey",
             headers={
                 "content-Type": "application/json",
-                "appKey": APP_KEY,
-                "appSecret": APP_SECRET,
+                "appKey": KIS_APP_KEY,
+                "appSecret": KIS_APP_SECRET,
             },
             json=post,
         ).json()["HASH"]

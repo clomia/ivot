@@ -1,76 +1,17 @@
-import os
-from datetime import datetime
+def gen():
+    for i in range(10):
+        if i == 5:
+            break
+        else:
+            yield i
 
-import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+it = gen()
 
-APP_KEY = os.environ.get("APP_KEY")
-APP_SECRET = os.environ.get("APP_SECRET")
-CANO = os.environ.get("CANO")
-ACNT_PRDT_CD = os.environ.get("ACNT_PRDT_CD")
+itit = enumerate(it)
 
-class _OAuth:
 
-    def __init__(self):
-        self.approval_key = requests.post(
-            url="https://openapi.koreainvestment.com:9443/oauth2/Approval",
-            json={
-                "grant_type": "client_credentials",
-                "appkey": APP_KEY,
-                "secretkey": APP_SECRET,
-            },
-        )["approval_key"]
-        self.refresh()
-
-    def refresh(self):
-        """ 토큰 갱신 """
-        token_info = requests.post(
-            url="https://openapi.koreainvestment.com:9443/oauth2/tokenP",
-            json={
-                "grant_type": "client_credentials",
-                "appkey": APP_KEY,
-                "appsecret": APP_SECRET
-            },
-        ).json()
-        self._token = token_info["access_token"]
-        self.expired = datetime.strptime(token_info["access_token_token_expired"], "%Y-%m-%d %H:%M:%S")
-    
-    @property
-    def token(self):
-        """ 유효한 토큰을 반환 """
-        if self.expired < datetime.now():
-            self.refresh()
-        return self._token
-
-    def hash(self, post:dict):
-        """ POST Request Body값 암호화에 필요한 hash key 생성 """
-        return requests.post(
-            url="https://openapi.koreainvestment.com:9443/uapi/hashkey",
-            headers={
-                "content-Type": "application/json",
-                "appKey": APP_KEY,
-                "appSecret": APP_SECRET,
-            },
-            json=post
-        ).json()["HASH"]
-
-auth = _OAuth()
-
-def is_daytime():
-    """ 해외 주간 거래시간인 경우 True """
-    res = requests.get(
-        url="https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/dayornight",
-        headers={
-            "authorization": f"Bearer {auth.token}",
-            "appkey":APP_KEY, 
-            "appsecret":APP_SECRET, 
-            "tr_id":"JTTT3010R",
-        },
-    )
-    return True if res.json()["output"]["PSBL_YN"] == "N" else False
-
-def price_history(symbol):
-    """ 현재로부터 과거 100일치  """
-    pass
+print(next(itit))
+print(next(itit))
+print(next(itit))
+print(next(itit))

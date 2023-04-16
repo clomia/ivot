@@ -1,63 +1,168 @@
 import pickle
 import requests
+from pathlib import Path
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List
 
-from kis.auth import APP_KEY, APP_SECRET, auth
+from kis.auth import KIS_APP_KEY, KIS_APP_SECRET, auth
 from calc.math import StockAnalyzer
 
-with (
-    open(f"symbols/AMS.pickle", "rb") as ams_f,
-    open(f"symbols/NAS.pickle", "rb") as nas_f,
-    open(f"symbols/NYS.pickle", "rb") as nys_f,
-):
-    ams_symbols: list = pickle.load(ams_f)
-    nas_symbols: list = pickle.load(nas_f)
-    nys_symbols: list = pickle.load(nys_f)
 
-# 거래소 코드는 API 요청시에만 주/야를 구분합니다. 정제된 데이터에 주간 거래소 코드를 사용하지 않습니다.
-exchange_list = ["AMS", "NAS", "NYS"]
+@dataclass
+class StockExchange:
+    code: str
+    name: str
+    stocks: List[str]
+
+
+stocks_dir = Path(__file__).resolve().parent / "stocks"
+
+exchange_list = [
+    KRX := StockExchange(
+        code="KRX",
+        name="Korea Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "KRX.pickle").read_bytes()),
+    ),
+    HKS := StockExchange(
+        code="HKS",
+        name="Hong Kong Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "HKS.pickle").read_bytes()),
+    ),
+    NYS := StockExchange(
+        code="NYS",
+        name="New York Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "NYS.pickle").read_bytes()),
+    ),
+    NAS := StockExchange(
+        code="NAS",
+        name="Nasdaq Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "NAS.pickle").read_bytes()),
+    ),
+    AMS := StockExchange(
+        code="AMS",
+        name="Amex stock exchange",
+        stocks=pickle.loads((stocks_dir / "AMS.pickle").read_bytes()),
+    ),
+    TSE := StockExchange(
+        code="TSE",
+        name="Tokyo Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "TSE.pickle").read_bytes()),
+    ),
+    SHS := StockExchange(
+        code="SHS",
+        name="Shanghai Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "SHS.pickle").read_bytes()),
+    ),
+    SZS := StockExchange(
+        code="SZS",
+        name="Shenzhen Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "SZS.pickle").read_bytes()),
+    ),
+    HSX := StockExchange(
+        code="HSX",
+        name="Ho Chi Minh City Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "HSX.pickle").read_bytes()),
+    ),
+    HNX := StockExchange(
+        code="HNX",
+        name="Hanoi Stock Exchange",
+        stocks=pickle.loads((stocks_dir / "HNX.pickle").read_bytes()),
+    ),
+]
 
 
 def daynight_consider(exchange_code: str):
-    """주간인 경우 주간 거래소 코드로 변환합니다."""
-    daytime = {"AMS": "BAA", "NAS": "BAQ", "NYS": "BAY"}  # 각 거래소의 주간 거래소
+    """exchange_code가 NAS/AMS/NYS 중 하나인 경우 주간 야간을 고려한 거래소 코드를 반환합니다."""
+
+    exc_codes = {"AMS": "BAA", "NAS": "BAQ", "NYS": "BAY"}  # 각 거래소의 주간 거래소
+    if exchange_code not in exc_codes.keys():
+        return exchange_code
+
     res = requests.get(
         url="https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/dayornight",
         headers={
             "authorization": f"Bearer {auth.token}",
-            "appkey": APP_KEY,
-            "appsecret": APP_SECRET,
+            "appkey": KIS_APP_KEY,
+            "appsecret": KIS_APP_SECRET,
             "tr_id": "JTTT3010R",
         },
     )
     is_daytime = True if res.json()["output"]["PSBL_YN"] == "N" else False
-    return daytime[exchange_code] if is_daytime else exchange_code
-
-
-class NoMoreData(Exception):
-    """더이상 데이터가 없어서 작업을 완료할 수 없습니다."""
+    return exc_codes[exchange_code] if is_daytime else exchange_code
 
 
 class Stock:
-    def __init__(self, *, exchange: str, symbol: str):
-        self.symbol = symbol
-        self.exchange = exchange
+    class _IncompleteIteration(Exception):
+        """클래스 내부적으로 사용되는 미완료 여부 감지용 예외 클래스"""
 
-    def _history_iter(self, ref_day: datetime):
+    def __init__(self, *, code: str, exchange: StockExchange):
+        self.code = code
+        self.exchange = exchange
+        self._history_iter = (
+            self._domestic_history_iter
+            if exchange is KRX
+            else self._overseas_history_iter
+        )
+
+    def _domestic_history_iter(self, ref_day: datetime):
+        """
+        - ref_day로부터 최대 100개의 과거 데이터를 이터레이션합니다.
+        - 국내(KRX)거래소 조회 시 사용됩니다.
+        """
+        res = requests.get(
+            url="https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+            headers={
+                "authorization": f"Bearer {auth.token}",
+                "appkey": KIS_APP_KEY,
+                "appsecret": KIS_APP_SECRET,
+                "tr_id": "FHKST03010100",
+            },
+            params={
+                "FID_COND_MRKT_DIV_CODE": "J",  # J=주식
+                "FID_INPUT_ISCD": self.code,
+                "FID_INPUT_DATE_1": datetime(  # 시작일: ref_day - 1년
+                    year=ref_day.year - 1, month=ref_day.month, day=ref_day.day
+                ).strftime("%Y%m%d"),
+                "FID_INPUT_DATE_2": ref_day.strftime("%Y%m%d"),
+                "FID_PERIOD_DIV_CODE": "D",  # 일봉
+                "FID_ORG_ADJ_PRC": "1",  # 원주가
+            },
+        ).json()
+        for ele in res["output2"]:
+            if not ele["stck_clpr"]:
+                raise self._IncompleteIteration
+            clos = float(ele["stck_clpr"])
+            low = float(ele["stck_lwpr"])
+            high = float(ele["stck_hgpr"])
+            typical_price = (clos + low + high) / 3
+            yield {
+                "date": datetime.strptime(ele["stck_bsop_date"], "%Y%m%d"),
+                "price": typical_price,
+                "low": low,
+                "high": high,
+                "tvol": float(ele["acml_vol"]),
+                "tamt": float(ele["acml_tr_pbmn"]),
+            }
+
+    def _overseas_history_iter(self, ref_day: datetime):
+        """
+        - ref_day로부터 최대 100개의 과거 데이터를 이터레이션합니다.
+        - 해외 거래소 조회 시 사용됩니다.
+        """
         res = requests.get(
             url="https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/dailyprice",
             headers={
                 "authorization": f"Bearer {auth.token}",
-                "appkey": APP_KEY,
-                "appsecret": APP_SECRET,
+                "appkey": KIS_APP_KEY,
+                "appsecret": KIS_APP_SECRET,
                 "tr_id": "HHDFS76240000",
             },
             params={
                 "AUTH": "",
-                "EXCD": daynight_consider(self.exchange),
-                "SYMB": self.symbol,
+                "EXCD": daynight_consider(self.exchange.code),
+                "SYMB": self.code,
                 "GUBN": 0,  # 0:일, 1:주, 2:월
                 "BYMD": ref_day.strftime("%Y%m%d"),
                 "MODP": 0,
@@ -65,7 +170,7 @@ class Stock:
         ).json()
         for ele in res["output2"]:
             if not ele["clos"]:
-                raise NoMoreData
+                raise self._IncompleteIteration
             clos = float(ele["clos"])
             low = float(ele["low"])
             high = float(ele["high"])
@@ -79,49 +184,71 @@ class Stock:
                 "tamt": float(ele["tamt"]),
             }
 
-    def analyzer(self, size: int = 100, ref_day: datetime = datetime.now()):
-        """
-        - ref_day로부터 size만큼의 과거 데이터가 담긴 StockAnalyzer를 생성하여 반환합니다.
-        - 존재하는 과거데이터가 size 보다 작은 경우 NoMoreData를 raise합니다.
-        """
-        total = defaultdict(list)
+    def analyzer(self, max_size: int = 100, ref_day: datetime = datetime.now()):
+        """ref_day로부터 최대 max_size만큼의 과거 데이터가 담긴 StockAnalyzer를 생성하여 반환합니다."""
+
+        bucket = defaultdict(list)  # 이터레이션 값이 누적되는 객체
         it = self._history_iter(ref_day)
-        while len(total["date"]) < size:
+
+        while len(bucket["date"]) < max_size:
             try:
                 current = next(it)
                 for key, value in current.items():
-                    total[key].append(value)
-            except StopIteration:  # 이전 호출 마지막과 다음 호출 처음이 겹치므로 제거
-                for data in total.values():
-                    del data[-1]
+                    bucket[key].append(value)
+            except StopIteration:
+                for data in bucket.values():
+                    del data[-1]  # 이전 호출 마지막과 다음 호출 처음이 겹치므로 제거
+                # 마지막 날짜를 처음으로 해서 다시 호출
                 it = self._history_iter(current["date"])
+            except self._IncompleteIteration:  # max_size를 다 채울 수 없음
+                break
 
-        for key in total:  # 데이터를 과거 -> 현재 순서대로 정렬합니다.
-            total[key].reverse()
+        for key in bucket:  # 데이터를 과거 -> 현재 순서대로 정렬합니다.
+            bucket[key].reverse()
 
-        return StockAnalyzer(symbol=self.symbol, exchange=self.exchange, **total)
+        return StockAnalyzer(code=self.code, exchange=self.exchange, **bucket)
 
     def current(self):
         """현재 채결가"""
-        res = requests.get(
-            url="https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price",
-            headers={
-                "authorization": f"Bearer {auth.token}",
-                "appkey": APP_KEY,
-                "appsecret": APP_SECRET,
-                "tr_id": "HHDFS00000300",
-            },
-            params={
-                "AUTH": "",
-                "EXCD": daynight_consider(self.exchange),
-                "SYMB": self.symbol,
-            },
-        ).json()
-        return float(res["output"]["last"])
+        if self.exchange is KRX:
+            res = requests.get(
+                url="https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price",
+                headers={
+                    "authorization": f"Bearer {auth.token}",
+                    "appkey": KIS_APP_KEY,
+                    "appsecret": KIS_APP_SECRET,
+                    "tr_id": "FHKST01010100",
+                },
+                params={
+                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_INPUT_ISCD": self.code,
+                },
+            ).json()
+            price = res["output"]["stck_prpr"]
+        else:
+            res = requests.get(
+                url="https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/price",
+                headers={
+                    "authorization": f"Bearer {auth.token}",
+                    "appkey": KIS_APP_KEY,
+                    "appsecret": KIS_APP_SECRET,
+                    "tr_id": "HHDFS00000300",
+                },
+                params={
+                    "AUTH": "",
+                    "EXCD": daynight_consider(self.exchange.code),
+                    "SYMB": self.code,
+                },
+            ).json()
+            price = res["output"]["last"]
+        return float(price) if price else None
+
+    def __repr__(self) -> str:
+        return f"<kis.get.Stock {self.code}/{self.exchange.code}>"
 
 
 def cond_search_api_call(params: dict) -> List[StockAnalyzer]:
-    """해외주식 조건검색 API call 함수"""
+    """해외주식 조건검색 API call 함수"""  #! 국내주식도 적용해서 업데이트
     analyzers = []
 
     for exc_code in exchange_list:
@@ -129,20 +256,15 @@ def cond_search_api_call(params: dict) -> List[StockAnalyzer]:
             url="https://openapi.koreainvestment.com:9443/uapi/overseas-price/v1/quotations/inquire-search",
             headers={
                 "authorization": f"Bearer {auth.token}",
-                "appkey": APP_KEY,
-                "appsecret": APP_SECRET,
+                "appkey": KIS_APP_KEY,
+                "appsecret": KIS_APP_SECRET,
                 "tr_id": "HHDFS76410000",
                 "custtype": "P",
             },
             params={"AUTH": "", "EXCD": exc_code} | params,
         ).json()
         for data in res["output2"]:
-            try:
-                analyzers.append(
-                    Stock(exchange=data["excd"], symbol=data["symb"]).analyzer()
-                )
-            except NoMoreData:
-                continue
+            analyzers.append(Stock(exchange=data["excd"], code=data["symb"]).analyzer())
 
     return analyzers
 
@@ -195,28 +317,19 @@ def market_capitalization(x1, x2):
     return cond_search_api_call(params)
 
 
-def all() -> List[StockAnalyzer]:
+def all(target_exchanges: List[StockExchange] = exchange_list) -> List[StockAnalyzer]:
     """
-    - AMS,NAS,NYS 3개의 미국 거래소에서 모든 주식을 불러옵니다.
-    - 약 23분 소요됩니다.
-    - 총 주식 갯수는 약 1만개입니다.
+    - 증권 거래소의 모든 주식을 StockAnalyzer로 불러옵니다.
+    - target_exchanges: 거래소 리스트 / default=모든 거래소
     """
     analyzers = []
-    targets = {
-        "AMS": ams_symbols,
-        "NAS": nas_symbols,
-        "NYS": nys_symbols,
-    }
-    for exchange, symbols in targets.items():
-        for cnt, symbol in enumerate(symbols):
+    for exchange in target_exchanges:
+        for cnt, code in enumerate(exchange.stocks):
             print("")
-            try:
-                analyzers.append(Stock(exchange=exchange, symbol=symbol).analyzer())
-            except NoMoreData:  # analzer를 구성할 정도의 데이터가 없다면 그냥 pass한다.
-                pass
+            analyzers.append(Stock(exchange=exchange, code=code).analyzer())
             print(
-                f"[Explorer (all)] loading {exchange}: {cnt/len(symbols) * 100:.3f}%",
+                f"[get.all] loading {exchange}: {cnt/len(exchange.stocks) * 100:.3f}%",
                 end="\r",
             )
-        print(f"[Explorer] {exchange} loading complete")
+        print(f"[get.all] {exchange} loading complete")
     return analyzers

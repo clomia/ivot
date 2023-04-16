@@ -1,3 +1,3 @@
 from kis.get import Stock
 
-Stock(exchange="NAS", symbol="META")
+Stock(exchange="NAS", code="META")
